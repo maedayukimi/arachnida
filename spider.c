@@ -11,15 +11,36 @@ typedef struct
 	size_t	size;
 }	t_buffer;
 
-bool	print_token(char* src)
+size_t	print_token(char* src)
 {
+	bool	flag = false;
+
 	char*	start = strstr(src, "<img");
+	if (!start)
+		return 0;
 	start+= 4;
 
+	char*	end = strstr(start, ">");
+	if (!end)
+		return 0;
+
 	char*	s_start = strstr(start, "src=\"");
+	if (!s_start || s_start > end)
+	{
+		s_start = strstr(start, "src=\'");
+		if (!s_start || s_start > end)
+			return 0;
+		flag = true;
+	}
 	s_start += 5;
 
-	char*	s_end = strstr(s_start, "\"");
+	char*	s_end;
+	if (!flag)
+		s_end = strstr(s_start, "\"");
+	else
+		s_end = strstr(s_start, "\'");
+	if (!s_end)
+		return 0;
 	size_t	len = s_end - s_start;
 
 	char*	dst = malloc(len + 1);
@@ -30,6 +51,7 @@ bool	print_token(char* src)
 	dst[len] = 0;
 
 	printf("%s\n", dst);
+	return (s_end - src + 1);
 }
 
 size_t	write_callback(char* ptr, size_t size, size_t nmemb, void* userdata)
@@ -69,6 +91,15 @@ int	main(void)
 		res = curl_easy_perform(curl);
 		curl_easy_cleanup(curl);
 
-		print_token(buf.data);
+		char*	itr = buf.data;
+		size_t	index;
+
+		while (1)
+		{
+			index = print_token(itr);
+			if (!index)
+				break ;
+			itr += index + 1;
+		}
 	}
 }
