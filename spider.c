@@ -132,9 +132,10 @@ char*	solve_url(char* dst)// now dst = cat.jpg
 		last = found;
 		url[last - url] = 0;
 	}
-	url = realloc(url, strlen(url) + 1);
-	url[last - url] = '/';
-	url[last - url + 1] = 0;
+	size_t	offset = last - url;
+	url = realloc(url, strlen(url) + 2);
+	url[offset] = '/';
+	url[offset + 1] = 0;
 	len = strlen(url) + strlen(src);
 	buf = malloc(len + 1);
 	if (!buf)
