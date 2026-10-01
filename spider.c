@@ -4,6 +4,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <sys/stat.h>
+#include <errno.h>
 
 static bool	flag = 0;
 static char*	root_url = 0;
@@ -150,6 +152,22 @@ char*	solve_url(char* dst)// now dst = cat.jpg
 	return buf;
 }
 
+size_t	write_callback(char* ptr, size_t size, size_t nmemb, void* userdata)
+{
+	t_buffer*	buf = (t_buffer*)userdata;
+	size_t		realsize = size * nmemb;
+	buf->data = realloc(buf->data, realsize + buf->size + 1);
+	if (!buf->data)
+		exit(1);
+
+	for (size_t i = 0; i < realsize; i++)
+		buf->data[buf->size + i] = ptr[i];
+	buf->size += realsize;
+	buf->data[buf->size] = 0;
+
+	return (size * nmemb);
+}
+
 size_t	print_token(char* src)
 {
 	bool	s_flag = false;
@@ -190,25 +208,65 @@ size_t	print_token(char* src)
 	dst[len] = 0;
 
 	dst = solve_url(dst);
+
+	CURL*	img_curl = curl_easy_init();
+	if (img_curl)
+	{
+		t_buffer	img_buf;
+		CURLcode	res;
+
+		img_buf.data = malloc(1);
+		if (!img_buf.data)
+			exit(1);
+
+		img_buf.size = 0;
+
+		curl_easy_setopt(img_curl, CURLOPT_URL, dst);
+		curl_easy_setopt(img_curl, CURLOPT_WRITEFUNCTION, write_callback);
+		curl_easy_setopt(img_curl, CURLOPT_WRITEDATA, &img_buf);
+		curl_easy_setopt(img_curl, CURLOPT_USERAGENT, "my-spidar/1.0");
+		curl_easy_setopt(img_curl, CURLOPT_FAILONERROR, 1L);// 4xx/5xx -> res != CURLE_OK
+		res = curl_easy_perform(img_curl);
+		curl_easy_cleanup(img_curl);
+
+		char*	name = strrchr(dst, '/') + 1;// "http://host/img/cat.jpg" -> "cat.jpg"
+		size_t	name_len = strlen(name);
+
+		if (res != CURLE_OK)
+			fprintf(stderr, "spider: %s: %s\n", dst, curl_easy_strerror(res));
+		else if (name_len == 0)// "http://host/img/" -> no file name
+			fprintf(stderr, "spider: %s: no file name\n", dst);
+		else
+		{
+			char*	save_path = malloc(7 + name_len + 1);
+			if (!save_path)
+				exit(1);
+
+			memcpy(save_path, "./data/", 7);
+			memcpy(save_path + 7, name, name_len);
+			save_path[7 + name_len] = 0;
+			if (access(save_path, F_OK) == 0)
+			{
+				// TODO: rename to cat_1.jpg, cat_2.jpg ...
+
+			}
+
+			FILE*	file = fopen(save_path, "wb");
+			if (!file)
+				perror(save_path);
+			else
+			{
+				fwrite(img_buf.data, 1, img_buf.size, file);
+				fclose(file);
+			}
+			free(save_path);
+		}
+		free(img_buf.data);
+	}
+
 	printf("%s\n", dst);
 	free(dst);
 	return (s_end - src + 1);
-}
-
-size_t	write_callback(char* ptr, size_t size, size_t nmemb, void* userdata)
-{
-	t_buffer*	buf = (t_buffer*)userdata;
-	size_t		realsize = size * nmemb;
-	buf->data = realloc(buf->data, realsize + buf->size + 1);
-	if (!buf->data)
-		exit(1);
-
-	for (int i = 0; i < realsize; i++)
-		buf->data[buf->size + i] = ptr[i];
-	buf->size += realsize;
-	buf->data[buf->size] = 0;
-
-	return (size * nmemb);
 }
 
 static void	find_root(char* url)//https://url.com/cat.img
@@ -275,12 +333,15 @@ int	main(int ac, char** av)
 		find_root(av[1]);
 		full_path = av[1];
 
+		if (mkdir("./data", 0755) == -1 && errno != EEXIST)
+			exit(1);
+
 		while (1)
 		{
 			index = print_token(itr);
 			if (!index)
 				break ;
-			itr += index + 1;
+			itr += index;
 		}
 		free(buf.data);
 	}
