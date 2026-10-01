@@ -168,7 +168,7 @@ size_t	write_callback(char* ptr, size_t size, size_t nmemb, void* userdata)
 	return (size * nmemb);
 }
 
-size_t	print_token(char* src)
+size_t	spider(char* src)
 {
 	bool	s_flag = false;
 
@@ -186,7 +186,7 @@ size_t	print_token(char* src)
 	{
 		s_start = strstr(start, "src=\'");
 		if (!s_start || s_start > end)
-			return 0;
+			return (end - src + 1); //continue whatever img broken
 		s_flag = true;
 	}
 	s_start += 5;
@@ -196,8 +196,8 @@ size_t	print_token(char* src)
 		s_end = strstr(s_start, "\"");
 	else
 		s_end = strstr(s_start, "\'");
-	if (!s_end)
-		return 0;
+	if (!s_end || s_end > end)
+		return (end - src + 1); //continue whatever img broken
 	size_t	len = s_end - s_start;
 
 	char*	dst = malloc(len + 1);
@@ -305,6 +305,15 @@ int	main(int ac, char** av)
 		exit(1);
 	}
 
+
+	if (strncmp(av[1], "https://", 8) == 0)
+		flag = 1;
+	else if (strncmp(av[1], "http://", 7) != 0)
+	{
+		fprintf(stderr, "usage: %s URL\n", av[0]);
+		exit(1);
+	}
+
 	CURL *curl = curl_easy_init();
 
 	if (curl)
@@ -327,9 +336,6 @@ int	main(int ac, char** av)
 		char*	itr = buf.data;
 		size_t	index;
 
-		if (strncmp(av[1], "https://", 8) == 0)
-			flag = 1;
-
 		find_root(av[1]);
 		full_path = av[1];
 
@@ -338,7 +344,7 @@ int	main(int ac, char** av)
 
 		while (1)
 		{
-			index = print_token(itr);
+			index = spider(itr);
 			if (!index)
 				break ;
 			itr += index;
